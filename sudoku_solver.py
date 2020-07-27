@@ -15,10 +15,17 @@ class SudokuPuzzle:
 		return tuple(x[column] for x in self._grid)
 
 	def get_subgrid(self, row, column):
+		"""
+		Returns the subgrid of the given row and column.
+
+		:param row: The inside the subgrid.
+		:param column: The column inside the subgrid.
+		:return: A tuple representing the subgrid that the given row/column is in.
+		"""
 		# need to check that the subside length definitely divides the side length equally
 		# (its okay for now doing "classic" sudoku puzzles)
-		row_offset = row * self.sub_side_length
-		column_offset = column * self.sub_side_length
+		row_offset = (row // self.sub_side_length) * self.sub_side_length
+		column_offset = (column // self.sub_side_length) * self.sub_side_length
 		if row_offset >= self.side_length or column_offset >= self.side_length:
 			raise ValueError(
 				f"{row}, {column} is not a valid subgrid position in a puzzle with side length {self.side_length} and sub side length {self.sub_side_length}")
@@ -101,6 +108,7 @@ class SudokuPuzzle:
 		invalid = False
 		for i in range(self.side_length):
 			invalid = invalid or any([x not in self.number_set and x != 0 for x in self.get_row(i)])
+			# Could remove the above or below line (but not both) without affecting this method
 			invalid = invalid or any([x not in self.number_set and x != 0 for x in self.get_column(i)])
 		return invalid
 
@@ -120,3 +128,51 @@ class SudokuPuzzle:
 		"""
 		# a clear grid should always consist of false equivalent values in order for this program to work
 		self._grid = [[0 for i in range(self.side_length)] for j in range(self.side_length)]
+
+	def solve(self):
+		if not self.is_valid():
+			raise Exception("The puzzle that is trying to be solved is invalid and will not have a solution.")
+		change_made = False
+		# TO SOLVE LOGICALLY
+		# 1. Fill in obvious tiles
+		# 2. If solved: Return
+		# 3. Mark remaining tiles with set of all possible values
+		# 4. Fill in tiles with singleton sets
+		# 5. If not solved return to step 1.
+
+		# 1.
+		for r in range(0, self.side_length, self.sub_side_length):
+			for c in range(0, self.side_length, self.sub_side_length):
+				unplaced_number_set = self.number_set.difference(set([x for y in self.get_subgrid(r, c) for x in y]))
+				if len(unplaced_number_set) > 0:
+					for n in unplaced_number_set:
+						valid_places = set(
+							[(x, y) for x in range(self.sub_side_length) for y in range(self.sub_side_length) if
+							 not self.get_tile(x + r, y + c)])
+						# here we have:
+						# * (c,r) are the coordinates of a subgrid.
+						# * c = subgrid column no.
+						# * r = subgrid row no.
+						# * valid_places is (r,c) of empty tiles in the subgrid
+						# * n = a value from the number set
+						# * n is not already in the subgrid
+						for i in range(self.sub_side_length):
+							if n in self.get_row(r + i):
+								valid_places = valid_places.difference(set([i, x] for x in range(self.sub_side_length)))
+							if n in self.get_column(c + i):
+								valid_places = valid_places.difference(set([x, i] for x in range(self.sub_side_length)))
+						if len(valid_places) == 0:
+							raise Exception(
+								f"Unable to place {n} in the puzzle in subgrid with top left tile row: {r} column: {c}.")
+						elif len(valid_places) == 1:
+							self.__set_tile(r + valid_places[0][0], c + valid_places[0][1], n)
+							change_made = True
+		# 2.
+		if self.is_complete():
+			print("PUZZLE SOLVED")
+			return self
+		# 3. todo
+		if not change_made:
+			raise Exception("The solving algorithm has insufficient ability to solve this puzzle.")
+		else:
+			self.solve()
