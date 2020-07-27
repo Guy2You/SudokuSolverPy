@@ -85,7 +85,7 @@ class SudokuPuzzle:
 
 		:return: True if every value in evey row/column is unique in that row. False otherwise
 		"""
-		valid = self.contains_invalid_values()
+		valid = not self.contains_invalid_values()
 		for i in range(self.side_length):
 			# might need to double check that side length and length of number set is the same
 			# * (puzzle is impossible if number set is shorter)
@@ -130,7 +130,7 @@ class SudokuPuzzle:
 		self._grid = [[0 for i in range(self.side_length)] for j in range(self.side_length)]
 
 	def solve(self):
-		if not self.is_valid():
+		if self.contains_invalid_values():
 			raise Exception("The puzzle that is trying to be solved is invalid and will not have a solution.")
 		change_made = False
 		# TO SOLVE LOGICALLY
@@ -158,14 +158,16 @@ class SudokuPuzzle:
 						# * n is not already in the subgrid
 						for i in range(self.sub_side_length):
 							if n in self.get_row(r + i):
-								valid_places = valid_places.difference(set([i, x] for x in range(self.sub_side_length)))
+								valid_places = valid_places.difference(
+									set([(i, x) for x in range(self.sub_side_length)]))
 							if n in self.get_column(c + i):
-								valid_places = valid_places.difference(set([x, i] for x in range(self.sub_side_length)))
+								valid_places = valid_places.difference(
+									set([(x, i) for x in range(self.sub_side_length)]))
 						if len(valid_places) == 0:
 							raise Exception(
 								f"Unable to place {n} in the puzzle in subgrid with top left tile row: {r} column: {c}.")
 						elif len(valid_places) == 1:
-							self.__set_tile(r + valid_places[0][0], c + valid_places[0][1], n)
+							self.__set_tile(r + next(iter(valid_places))[0], c + next(iter(valid_places))[1], n)
 							change_made = True
 		# 2.
 		if self.is_complete():
