@@ -143,7 +143,7 @@ class SudokuPuzzle:
 		# 1.
 		for r in range(0, self.side_length, self.sub_side_length):
 			for c in range(0, self.side_length, self.sub_side_length):
-				unplaced_number_set = self.number_set.difference(set([x for y in self.get_subgrid(r, c) for x in y]))
+				unplaced_number_set = self.number_set.difference([x for y in self.get_subgrid(r, c) for x in y])
 				if len(unplaced_number_set) > 0:
 					for n in unplaced_number_set:
 						valid_places = set(
@@ -167,13 +167,36 @@ class SudokuPuzzle:
 							raise Exception(
 								f"Unable to place {n} in the puzzle in subgrid with top left tile row: {r} column: {c}.")
 						elif len(valid_places) == 1:
-							self.__set_tile(r + next(iter(valid_places))[0], c + next(iter(valid_places))[1], n)
+							place = valid_places.pop()
+							del valid_places
+							self.__set_tile(r + place[0], c + place[1], n)
 							change_made = True
 		# 2.
 		if self.is_complete():
-			print("PUZZLE SOLVED")
+			print("PUZZLE SOLVED 1")
 			return self
-		# 3. todo
+		# 3.
+		for r in range(self.side_length):
+			for c in range(self.side_length):
+				if not self.get_tile(r, c):
+					# (c,r) are the coordinates of a single empty tile
+					possible_number_set = self.number_set.difference(
+						[x for y in self.get_subgrid(r, c) for x in y if not isinstance(x, set)])
+					possible_number_set = possible_number_set.difference(
+						[x for x in self.get_row(r) if not isinstance(x, set)])
+					possible_number_set = possible_number_set.difference(
+						[x for x in self.get_column(c) if not isinstance(x, set)])
+					# 4.
+					if len(possible_number_set) == 0:
+						raise Exception(f"Unable to place a value in row: {r} column {c}. It is impossible")
+					elif len(possible_number_set) == 1:
+						self.__set_tile(r, c, possible_number_set.pop())
+						change_made = True
+		# 5.
+		if self.is_complete():
+			print("PUZZLE SOLVED 2")
+			return self
+
 		if not change_made:
 			raise Exception("The solving algorithm has insufficient ability to solve this puzzle.")
 		else:
