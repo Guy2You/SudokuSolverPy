@@ -130,72 +130,87 @@ class SudokuPuzzle:
 		self._grid = [[0 for i in range(self.side_length)] for j in range(self.side_length)]
 
 	def solve(self):
+		change_made = False
+
+		def check_complete():
+			if self.is_complete():
+				print(f"PUZZLE SOLVED")
+				return True
+
+		def fill_known_values():
+			"""
+			This method checks the valid positions of each number in each subgrid.
+			If there is only one valid position the number will be placed in it.
+
+			:return: None
+			"""
+			for r in range(0, self.side_length, self.sub_side_length):
+				for c in range(0, self.side_length, self.sub_side_length):
+					unplaced_number_set = self.number_set.difference([x for y in self.get_subgrid(r, c) for x in y])
+					if len(unplaced_number_set) > 0:
+						for n in unplaced_number_set:
+							valid_places = set(
+								[(x, y) for x in range(self.sub_side_length) for y in range(self.sub_side_length) if
+								 not self.get_tile(x + r, y + c)])
+							# here we have:
+							# * (c,r) are the coordinates of a subgrid.
+							# * c = subgrid column no.
+							# * r = subgrid row no.
+							# * valid_places is (r,c) of empty tiles in the subgrid
+							# * n = a value from the number set
+							# * n is not already in the subgrid
+							for i in range(self.sub_side_length):
+								if n in self.get_row(r + i):
+									valid_places = valid_places.difference(
+										set([(i, x) for x in range(self.sub_side_length)]))
+								if n in self.get_column(c + i):
+									valid_places = valid_places.difference(
+										set([(x, i) for x in range(self.sub_side_length)]))
+							if len(valid_places) == 0:
+								raise Exception(
+									f"Unable to place {n} in the puzzle in subgrid with top left tile row: {r} column: {c}.")
+							elif len(valid_places) == 1:
+								place = valid_places.pop()
+								del valid_places
+								self.__set_tile(r + place[0], c + place[1], n)
+								self.change_made = True
+
+		def fill_singleton_possibilities():
+			"""
+			This method iterates over each tile and applies a set of possible values to the tile based on
+			what is in the same subgrid, row and column as that tile. If the set of values is a singleton then
+			the singleton value is placed in the tile.
+
+			:return: None
+			"""
+			for r in range(self.side_length):
+				for c in range(self.side_length):
+					if not self.get_tile(r, c):
+						# (c,r) are the coordinates of a single empty tile
+						possible_number_set = self.number_set.difference(
+							[x for y in self.get_subgrid(r, c) for x in y if not isinstance(x, set)])
+						possible_number_set = possible_number_set.difference(
+							[x for x in self.get_row(r) if not isinstance(x, set)])
+						possible_number_set = possible_number_set.difference(
+							[x for x in self.get_column(c) if not isinstance(x, set)])
+						# 4.
+						if len(possible_number_set) == 0:
+							raise Exception(f"Unable to place a value in row: {r} column {c}. It is impossible")
+						elif len(possible_number_set) == 1:
+							self.__set_tile(r, c, possible_number_set.pop())
+							self.change_made = True
+
 		if self.contains_invalid_values():
 			raise Exception("The puzzle that is trying to be solved is invalid and will not have a solution.")
-		change_made = False
-		# TO SOLVE LOGICALLY
-		# 1. Fill in obvious tiles
-		# 2. If solved: Return
-		# 3. Mark remaining tiles with set of all possible values
-		# 4. Fill in tiles with singleton sets
-		# 5. If not solved return to step 1.
 
-		# 1.
-		for r in range(0, self.side_length, self.sub_side_length):
-			for c in range(0, self.side_length, self.sub_side_length):
-				unplaced_number_set = self.number_set.difference([x for y in self.get_subgrid(r, c) for x in y])
-				if len(unplaced_number_set) > 0:
-					for n in unplaced_number_set:
-						valid_places = set(
-							[(x, y) for x in range(self.sub_side_length) for y in range(self.sub_side_length) if
-							 not self.get_tile(x + r, y + c)])
-						# here we have:
-						# * (c,r) are the coordinates of a subgrid.
-						# * c = subgrid column no.
-						# * r = subgrid row no.
-						# * valid_places is (r,c) of empty tiles in the subgrid
-						# * n = a value from the number set
-						# * n is not already in the subgrid
-						for i in range(self.sub_side_length):
-							if n in self.get_row(r + i):
-								valid_places = valid_places.difference(
-									set([(i, x) for x in range(self.sub_side_length)]))
-							if n in self.get_column(c + i):
-								valid_places = valid_places.difference(
-									set([(x, i) for x in range(self.sub_side_length)]))
-						if len(valid_places) == 0:
-							raise Exception(
-								f"Unable to place {n} in the puzzle in subgrid with top left tile row: {r} column: {c}.")
-						elif len(valid_places) == 1:
-							place = valid_places.pop()
-							del valid_places
-							self.__set_tile(r + place[0], c + place[1], n)
-							change_made = True
-		# 2.
-		if self.is_complete():
-			print("PUZZLE SOLVED 1")
-			return self
-		# 3.
-		for r in range(self.side_length):
-			for c in range(self.side_length):
-				if not self.get_tile(r, c):
-					# (c,r) are the coordinates of a single empty tile
-					possible_number_set = self.number_set.difference(
-						[x for y in self.get_subgrid(r, c) for x in y if not isinstance(x, set)])
-					possible_number_set = possible_number_set.difference(
-						[x for x in self.get_row(r) if not isinstance(x, set)])
-					possible_number_set = possible_number_set.difference(
-						[x for x in self.get_column(c) if not isinstance(x, set)])
-					# 4.
-					if len(possible_number_set) == 0:
-						raise Exception(f"Unable to place a value in row: {r} column {c}. It is impossible")
-					elif len(possible_number_set) == 1:
-						self.__set_tile(r, c, possible_number_set.pop())
-						change_made = True
-		# 5.
-		if self.is_complete():
-			print("PUZZLE SOLVED 2")
-			return self
+		fill_known_values()
+		if check_complete():
+			print("SOLVED")
+			return None
+		fill_singleton_possibilities()
+		if check_complete():
+			print("SOLVED")
+			return None
 
 		if not change_made:
 			raise Exception("The solving algorithm has insufficient ability to solve this puzzle.")
