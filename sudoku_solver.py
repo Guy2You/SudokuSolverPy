@@ -137,16 +137,18 @@ class SudokuPuzzle:
 				print(f"PUZZLE SOLVED")
 				return True
 
-		def fill_known_values():
+		def fill_known_subgrid_values():
 			"""
 			This method checks the valid positions of each number in each subgrid.
 			If there is only one valid position the number will be placed in it.
 
 			:return: None
 			"""
+			nonlocal change_made
 			for r in range(0, self.side_length, self.sub_side_length):
 				for c in range(0, self.side_length, self.sub_side_length):
-					unplaced_number_set = self.number_set.difference([x for y in self.get_subgrid(r, c) for x in y])
+					unplaced_number_set = self.number_set.difference(
+						[x for y in self.get_subgrid(r, c) for x in y if x in self.number_set])
 					if len(unplaced_number_set) > 0:
 						for n in unplaced_number_set:
 							valid_places = set(
@@ -173,7 +175,7 @@ class SudokuPuzzle:
 								place = valid_places.pop()
 								del valid_places
 								self.__set_tile(r + place[0], c + place[1], n)
-								self.change_made = True
+								change_made = True
 
 		def fill_singleton_possibilities():
 			"""
@@ -183,31 +185,80 @@ class SudokuPuzzle:
 
 			:return: None
 			"""
+			nonlocal change_made
 			for r in range(self.side_length):
 				for c in range(self.side_length):
 					if not self.get_tile(r, c):
 						# (c,r) are the coordinates of a single empty tile
 						possible_number_set = self.number_set.difference(
-							[x for y in self.get_subgrid(r, c) for x in y if not isinstance(x, set)])
+							[x for y in self.get_subgrid(r, c) for x in y if x in self.number_set])
 						possible_number_set = possible_number_set.difference(
-							[x for x in self.get_row(r) if not isinstance(x, set)])
+							[x for x in self.get_row(r) if x in self.number_set])
 						possible_number_set = possible_number_set.difference(
-							[x for x in self.get_column(c) if not isinstance(x, set)])
-						# 4.
+							[x for x in self.get_column(c) if x in self.number_set])
+
 						if len(possible_number_set) == 0:
 							raise Exception(f"Unable to place a value in row: {r} column {c}. It is impossible")
 						elif len(possible_number_set) == 1:
 							self.__set_tile(r, c, possible_number_set.pop())
-							self.change_made = True
+							change_made = True
+
+		def fill_known_row_column_values():
+			"""
+			This method checks the valid positions of each number in each row/column.
+			If there is only one valid position the number will be placed in it.
+
+			:return: None
+			"""
+			nonlocal change_made
+			for n in self.number_set:
+				for i in range(self.side_length):
+					# * n = a value from the number set
+					# * i = an index along the row/column
+					if n not in self.get_row(i):
+						# take all indexes in the row
+						valid_row_indexes = set(range(self.side_length))
+						# remove indexes where there is already a value
+						valid_row_indexes = valid_row_indexes.difference(
+							[x for x in range(self.side_length) if self.get_row(i)[x] in self.number_set])
+						# remove indexes where n conflicts with itself in that column
+						valid_row_indexes = valid_row_indexes.difference(
+							[x for x in range(self.side_length) if n in self.get_column(x)])
+						if len(valid_row_indexes) == 0:
+							raise Exception(f"Unable to place {n} in row: {i}. It is impossible")
+						elif len(valid_row_indexes) == 1:
+							index = valid_row_indexes.pop()
+							self.__set_tile(i, index, n)
+							change_made = True
+
+					if n not in self.get_column(i):
+						# take all indexes in the column
+						valid_column_indexes = set(range(self.side_length))
+						# remove indexes where there is already a value
+						valid_column_indexes = valid_column_indexes.difference(
+							[x for x in range(self.side_length) if self.get_column(i)[x] in self.number_set])
+						# remove indexes where n conflicts with itself in that column
+						valid_column_indexes = valid_column_indexes.difference(
+							[x for x in range(self.side_length) if n in self.get_row(x)])
+						if len(valid_column_indexes) == 0:
+							raise Exception(f"Unable to place {n} in column: {i}. It is impossible")
+						elif len(valid_column_indexes) == 1:
+							index = valid_column_indexes.pop()
+							self.__set_tile(index, i, n)  # probably where the error is
+							change_made = True
 
 		if self.contains_invalid_values():
 			raise Exception("The puzzle that is trying to be solved is invalid and will not have a solution.")
 
-		fill_known_values()
+		fill_known_subgrid_values()
 		if check_complete():
 			print("SOLVED")
 			return None
 		fill_singleton_possibilities()
+		if check_complete():
+			print("SOLVED")
+			return None
+		fill_known_row_column_values()
 		if check_complete():
 			print("SOLVED")
 			return None
