@@ -1,3 +1,8 @@
+import json
+import copy
+import math as maths  # because god save the queen
+
+
 class SudokuPuzzle:
 
 	def __init__(self):
@@ -5,14 +10,51 @@ class SudokuPuzzle:
 		self.sub_side_length = 3
 		self._grid = []
 		self.__clear_grid()
+		self._solved_grid = copy.deepcopy(self._grid)
 		# number set should never contain any false equivalent values or this program will fail
 		self.number_set = set(range(1, 10))
 
+	def __set_grid(self, grid):
+		"""
+		Sets the grid object of the puzzle.
+		When the grid is changed, the other class variables are also changed.
+
+		:param grid: The new grid object to apply.
+		:return: None
+		"""
+		print(f"SETTING GRID...", end=" ", flush=True)
+		if not isinstance(grid, list):
+			print(f"FAILED - SEE EXCEPTION")
+			raise TypeError(f"Expected grid to be of type list, actual type: {type(grid)}")
+		if any([len(x) != len(grid) for x in grid]):
+			print(f"FAILED - SEE EXCEPTION")
+			raise TypeError(f"Expected grid length to be equivalent to width.")
+		if len(grid) < 4:
+			print(f"FAILED - SEE EXCEPTION")
+			raise TypeError(
+				f"Grid with side length {len(grid)} is too small to be a valid puzzle. Minimum length is 4x4.")
+		# method for calculating whether the side length is a perfect square adapted from:
+		# https://djangocentral.com/python-program-to-check-if-a-number-is-perfect-square/
+		if not int(maths.sqrt(len(grid)) + 0.5) ** 2 == len(grid):
+			print(f"FAILED - SEE EXCEPTION")
+			raise TypeError(f"Expected grid side length to be square. Actual side length {len(grid)}.")
+
+		self._grid = grid
+		self._solved_grid = copy.deepcopy(grid)
+		self.side_length = len(grid)
+		self.sub_side_length = int(maths.sqrt(self.side_length) + 0.5)
+		self.number_set = set(range(1, self.side_length + 1))
+		print(f"DONE")
+
+		print(f"SOLVING PUZZLE...", end=" ", flush=True)
+		self.solve()
+		print(f"DONE")
+
 	def get_row(self, row):
-		return tuple(self._grid[row])
+		return tuple(self._solved_grid[row])
 
 	def get_column(self, column):
-		return tuple(x[column] for x in self._grid)
+		return tuple(x[column] for x in self._solved_grid)
 
 	def get_subgrid(self, row, column):
 		"""
@@ -37,7 +79,7 @@ class SudokuPuzzle:
 	def get_tile(self, row, column):
 		if row >= self.side_length or column >= self.side_length:
 			raise ValueError(f"{row}, {column} is not a valid position in a puzzle with side length {self.side_length}")
-		return self._grid[row][column]
+		return self._solved_grid[row][column]
 
 	def __set_tile(self, row, column, value):
 		if value not in self.number_set:
@@ -45,7 +87,7 @@ class SudokuPuzzle:
 				f"{value} is not a valid value in this puzzle. Valid values are: {', '.join(str(x) for x in self.number_set)}")
 		if row >= self.side_length or column >= self.side_length:
 			raise ValueError(f"{row}, {column} is not a valid position in a puzzle with side length {self.side_length}")
-		self._grid[row][column] = value
+		self._solved_grid[row][column] = value
 
 	def __set_subgrid_tile(self, sub_row, sub_col, row, column, value):
 		"""
@@ -94,10 +136,11 @@ class SudokuPuzzle:
 			valid = valid and len(set(self.get_row(i))) == self.side_length
 			valid = valid and len(set(self.get_column(i))) == self.side_length
 			valid = valid and len(set(
-				[x for x in y
-				 for y in self.get_subgrid(r, c)
+				[x
 				 for r in range(0, self.side_length, self.sub_side_length)
-				 for c in range(0, self.side_length, self.sub_side_length)])) == self.side_length
+				 for c in range(0, self.side_length, self.sub_side_length)
+				 for y in self.get_subgrid(r, c)
+				 for x in y])) == self.side_length
 
 		return valid
 
@@ -139,6 +182,7 @@ class SudokuPuzzle:
 		"""
 		# a clear grid should always consist of false equivalent values in order for this program to work
 		self._grid = [[0 for i in range(self.side_length)] for j in range(self.side_length)]
+		self._solved_grid = copy.deepcopy(self._grid)
 
 	def solve(self):
 		change_made = False
@@ -273,3 +317,42 @@ class SudokuPuzzle:
 			raise Exception("The solving algorithm has insufficient ability to solve this puzzle.")
 		else:
 			self.solve()
+
+	def get_as_serialized_dict(self):
+		data = {
+			"side length": self.side_length,
+			"grid": self._grid,
+			"solved grid": self._solved_grid
+		}
+		return data
+
+	def set_from_serialised_dict(self, data):
+		self.__set_grid(data["grid"])
+
+
+def main():
+	grid = [
+		[0, 0, 0, 0, 6, 0, 0, 7, 4],
+		[0, 0, 0, 2, 4, 5, 0, 0, 0],
+		[0, 0, 2, 0, 0, 0, 0, 0, 5],
+		[6, 0, 0, 0, 2, 4, 1, 0, 0],
+		[0, 2, 9, 0, 5, 0, 7, 8, 0],
+		[0, 0, 8, 3, 7, 0, 0, 0, 2],
+		[3, 0, 0, 0, 0, 0, 4, 0, 0],
+		[0, 0, 0, 6, 3, 8, 0, 0, 0],
+		[8, 7, 0, 0, 1, 0, 0, 0, 0]
+	]
+	serial = {
+		"side length": 9,
+		"grid": grid,
+		"solved grid": []
+	}
+	puzzle = SudokuPuzzle()
+	puzzle.set_from_serialised_dict(serial)
+	with open("PuzzleExample.json", "wt") as json_out:
+		data = {"puzzles": []}
+		data["puzzles"].append(puzzle.get_as_serialized_dict())
+		json.dump(data, json_out)
+
+
+if __name__ == '__main__': main()
