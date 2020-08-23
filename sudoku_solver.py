@@ -8,6 +8,7 @@ class SudokuPuzzle:
 	def __init__(self):
 		self.side_length = 9
 		self.sub_side_length = 3
+		self.difficulty = None  # todo
 		self._grid = []
 		self.__clear_grid()
 		self._solved_grid = copy.deepcopy(self._grid)
@@ -44,6 +45,7 @@ class SudokuPuzzle:
 		self.side_length = len(grid)
 		self.sub_side_length = int(maths.sqrt(self.side_length) + 0.5)
 		self.number_set = set(range(1, self.side_length + 1))
+		self._set_difficulty()
 		print(f"DONE")
 
 		print(f"SOLVING PUZZLE...", end=" ", flush=True)
@@ -81,15 +83,15 @@ class SudokuPuzzle:
 			raise ValueError(f"{row}, {column} is not a valid position in a puzzle with side length {self.side_length}")
 		return self._solved_grid[row][column]
 
-	def __set_tile(self, row, column, value):
-		if value not in self.number_set:
+	def __set_tile(self, row, column, value, force=False):
+		if value not in self.number_set and not force:
 			raise ValueError(
 				f"{value} is not a valid value in this puzzle. Valid values are: {', '.join(str(x) for x in self.number_set)}")
 		if row >= self.side_length or column >= self.side_length:
 			raise ValueError(f"{row}, {column} is not a valid position in a puzzle with side length {self.side_length}")
 		self._solved_grid[row][column] = value
 
-	def __set_subgrid_tile(self, sub_row, sub_col, row, column, value):
+	def __set_subgrid_tile(self, sub_row, sub_col, row, column, value, force=False):
 		"""
 		Sets the value of a tile within a given subgrid.
 
@@ -97,16 +99,18 @@ class SudokuPuzzle:
 		:param sub_col: The subgrid column.
 		:param row: The row in the subgrid.
 		:param column: The column in the subgrid.
+		:param value: The value to set the tile to.
+		:param force: Setting this flag to true suppresses the value is in the number set check.
 		:return: None
 		"""
-		row_offset = row * self.sub_side_length
-		column_offset = column * self.sub_side_length
-		if row_offset >= self.side_length or column_offset >= self.side_length:
-			raise ValueError(
-				f"{row}, {column} is not a valid subgrid position in a puzzle with side length {self.side_length} and sub side length {self.sub_side_length}")
-		if sub_row >= self.sub_side_length or sub_col >= self.sub_side_length:
+		row_offset = sub_row * self.sub_side_length
+		column_offset = sub_col * self.sub_side_length
+		if sub_row >= self.sub_side_length or sub_col >= self.sub_side_length or sub_row < 0 or sub_col < 0:
 			raise ValueError(
 				f"{sub_row}, {sub_col} is not a valid position in a subgrid with side length {self.sub_side_length}")
+		if row >= self.sub_side_length or column >= self.sub_side_length or row < 0 or column < 0:
+			raise ValueError(
+				f"{row}, {column} is not a valid subgrid position in a puzzle with side length {self.side_length} and sub side length {self.sub_side_length}")
 		self.__set_tile(row_offset + row, column_offset + column, value)
 
 	def is_full(self):
@@ -184,8 +188,32 @@ class SudokuPuzzle:
 		self._grid = [[0 for i in range(self.side_length)] for j in range(self.side_length)]
 		self._solved_grid = copy.deepcopy(self._grid)
 
+	def _set_difficulty(self):
+		self.difficulty = None  # todo
+
 	def solve(self):
 		change_made = False
+
+		def get_valid_positions(value, subgrid_row, subgrid_col):
+			"""
+			This method returns the valid positions of a given value in a given subgrid.
+
+			:param value: The value to find the valid positions for.
+			:param subgrid_row: The row value of the top left corner of the subgrid being searched.
+			:param subgrid_col: The column value of the top left corner of the subgrid being searched.
+			:return: A set of (r,c) tuples which are valid positions for the value to be placed in.
+			"""
+			valid_positions = set([(x, y) for x in range(self.sub_side_length) for y in range(self.sub_side_length) if
+								   not self.get_tile(x + subgrid_row, y + subgrid_col)])
+			for i in range(self.sub_side_length):
+				if value in self.get_row(subgrid_row + i):
+					valid_positions = valid_positions.difference([(i, x) for x in range(self.sub_side_length)])
+				if value in self.get_column(subgrid_col + i):
+					valid_positions = valid_positions.difference([(x, i) for x in range(self.sub_side_length)])
+			if len(valid_positions) == 0:
+				raise Exception(
+					f"Unable to find valid positions for {value} in subgrid with top left tile row: {subgrid_row} column: {subgrid_col}.")
+			return valid_positions
 
 		def fill_known_subgrid_values():
 			"""
@@ -199,33 +227,13 @@ class SudokuPuzzle:
 				for c in range(0, self.side_length, self.sub_side_length):
 					unplaced_number_set = self.number_set.difference(
 						[x for y in self.get_subgrid(r, c) for x in y if x in self.number_set])
-					if len(unplaced_number_set) > 0:
-						for n in unplaced_number_set:
-							valid_places = set(
-								[(x, y) for x in range(self.sub_side_length) for y in range(self.sub_side_length) if
-								 not self.get_tile(x + r, y + c)])
-							# here we have:
-							# * (c,r) are the coordinates of a subgrid.
-							# * c = subgrid column no.
-							# * r = subgrid row no.
-							# * valid_places is (r,c) of empty tiles in the subgrid
-							# * n = a value from the number set
-							# * n is not already in the subgrid
-							for i in range(self.sub_side_length):
-								if n in self.get_row(r + i):
-									valid_places = valid_places.difference(
-										set([(i, x) for x in range(self.sub_side_length)]))
-								if n in self.get_column(c + i):
-									valid_places = valid_places.difference(
-										set([(x, i) for x in range(self.sub_side_length)]))
-							if len(valid_places) == 0:
-								raise Exception(
-									f"Unable to place {n} in the puzzle in subgrid with top left tile row: {r} column: {c}.")
-							elif len(valid_places) == 1:
-								place = valid_places.pop()
-								del valid_places
-								self.__set_tile(r + place[0], c + place[1], n)
-								change_made = True
+					for n in unplaced_number_set:
+						valid_places = get_valid_positions(n, r, c)
+						if len(valid_places) == 1:
+							place = valid_places.pop()
+							del valid_places
+							self.__set_tile(r + place[0], c + place[1], n)
+							change_made = True
 
 		def fill_singleton_possibilities():
 			"""
@@ -274,6 +282,9 @@ class SudokuPuzzle:
 						# remove indexes where n conflicts with itself in that column
 						valid_row_indexes = valid_row_indexes.difference(
 							[x for x in range(self.side_length) if n in self.get_column(x)])
+						# remove indexes where n conflicts with itself in that subgrid
+						valid_row_indexes = valid_row_indexes.difference(
+							[x for x in range(self.side_length) if n in [y for z in self.get_subgrid(i, x) for y in z]])
 						if len(valid_row_indexes) == 0:
 							raise Exception(f"Unable to place {n} in row: {i}. It is impossible")
 						elif len(valid_row_indexes) == 1:
@@ -290,12 +301,78 @@ class SudokuPuzzle:
 						# remove indexes where n conflicts with itself in that column
 						valid_column_indexes = valid_column_indexes.difference(
 							[x for x in range(self.side_length) if n in self.get_row(x)])
+						# remove indexes where n conflicts with itself in that subgrid
+						valid_column_indexes = valid_column_indexes.difference(
+							[x for x in range(self.side_length) if n in [y for z in self.get_subgrid(x, i) for y in z]])
 						if len(valid_column_indexes) == 0:
 							raise Exception(f"Unable to place {n} in column: {i}. It is impossible")
 						elif len(valid_column_indexes) == 1:
 							index = valid_column_indexes.pop()
 							self.__set_tile(index, i, n)  # probably where the error is
 							change_made = True
+
+		def fill_based_on_multiple_value_possibilities():
+			nonlocal change_made
+			for r in range(0, self.side_length, self.sub_side_length):
+				for c in range(0, self.side_length, self.sub_side_length):
+					# r is the subgrid row number
+					# c is the subgrid column number
+					# both go up in steps of self.sub_side_length
+					def fill_multiple_value_tiles():
+						position_map = {}
+						unplaced_number_set = self.number_set.difference(
+							[x for y in self.get_subgrid(r, c) for x in y if isinstance(x, int)])
+						unplaced_number_set = unplaced_number_set.difference(
+							[x for y in self.get_subgrid(r, c) for z in y if isinstance(z, set) for x in z])
+						for n in unplaced_number_set:
+							valid_places = get_valid_positions(n, r, c)
+							position_map.update({n: valid_places})
+						for n, p in position_map.items():
+							identical_list = [x for x in position_map.items() if x[1] == p]
+							if len(identical_list) > 1 and len(identical_list) == len(identical_list[0][1]):
+								for i in identical_list[0][1]:
+									self.__set_tile(r + i[0], c + i[1], set([x for x, _ in identical_list]), force=True)
+								fill_multiple_value_tiles()
+								break
+
+					def clear_multiple_value_tiles():
+						for i in range(0, self.sub_side_length, 1):
+							for j in range(0, self.sub_side_length, 1):
+								if isinstance(self.get_tile(r + i, c + j), set):
+									self.__set_tile(r + i, c + j, 0, force=True)
+
+					fill_multiple_value_tiles()
+
+					unplaced_number_set = self.number_set.difference(
+						[x for y in self.get_subgrid(r, c) for x in y if x in self.number_set])
+					unplaced_number_set = unplaced_number_set.difference(
+						[x for y in self.get_subgrid(r, c) for z in y if isinstance(z, set) for x in z])
+					for n in unplaced_number_set:
+						valid_places = get_valid_positions(n, r, c)
+						if len(valid_places) == 1:
+							place = valid_places.pop()
+							del valid_places
+							self.__set_tile(r + place[0], c + place[1], n)
+							change_made = True
+
+					if not self.get_tile(r, c):
+						# (c,r) are the coordinates of a single empty tile
+						possible_number_set = self.number_set.difference(
+							[x for y in self.get_subgrid(r, c) for x in y if x in self.number_set])
+						possible_number_set = possible_number_set.difference(
+							[x for y in self.get_subgrid(r, c) for z in y if isinstance(z, set) for x in z])
+						possible_number_set = possible_number_set.difference(
+							[x for x in self.get_row(r) if x in self.number_set])
+						possible_number_set = possible_number_set.difference(
+							[x for x in self.get_column(c) if x in self.number_set])
+
+						if len(possible_number_set) == 0:
+							raise Exception(f"Unable to place a value in row: {r} column {c}. It is impossible")
+						elif len(possible_number_set) == 1:
+							self.__set_tile(r, c, possible_number_set.pop())
+							change_made = True
+
+					clear_multiple_value_tiles()
 
 		if self.contains_invalid_values():
 			raise Exception("The puzzle that is trying to be solved is invalid and will not have a solution.")
@@ -312,6 +389,10 @@ class SudokuPuzzle:
 		if self.is_complete():
 			# print("SOLVED")
 			return None
+		if not change_made:
+			fill_based_on_multiple_value_possibilities()
+			if self.is_complete():
+				return None
 
 		if not change_made:
 			raise Exception("The solving algorithm has insufficient ability to solve this puzzle.")
@@ -321,6 +402,7 @@ class SudokuPuzzle:
 	def get_as_serialized_dict(self):
 		data = {
 			"side length": self.side_length,
+			"difficulty": self.difficulty,
 			"grid": self._grid,
 			"solved grid": self._solved_grid
 		}
@@ -331,6 +413,26 @@ class SudokuPuzzle:
 
 
 def main():
+	puzzles_data = {"puzzles": []}
+
+	def add_to_puzzles(new_puzzle):
+		if isinstance(new_puzzle, SudokuPuzzle):
+			puzzles_data["puzzles"].append(new_puzzle.get_as_serialized_dict())
+		else:
+			raise TypeError(f"{new_puzzle} is not an object of type {SudokuPuzzle} and cannot be as such.")
+
+	unsolveable_grid = [
+		[0, 0, 3, 2, 0, 0, 0, 0, 0],
+		[0, 4, 7, 0, 1, 0, 0, 0, 6],
+		[0, 0, 5, 0, 0, 4, 0, 0, 0],
+		[0, 7, 0, 0, 5, 0, 0, 0, 0],
+		[6, 2, 0, 0, 0, 0, 0, 1, 4],
+		[0, 0, 0, 0, 8, 0, 0, 3, 0],
+		[0, 0, 0, 3, 0, 0, 8, 0, 0],
+		[9, 0, 0, 0, 6, 0, 7, 4, 0],
+		[0, 0, 0, 0, 0, 5, 6, 0, 0]
+	]
+
 	grid = [
 		[0, 0, 0, 0, 6, 0, 0, 7, 4],
 		[0, 0, 0, 2, 4, 5, 0, 0, 0],
@@ -342,17 +444,36 @@ def main():
 		[0, 0, 0, 6, 3, 8, 0, 0, 0],
 		[8, 7, 0, 0, 1, 0, 0, 0, 0]
 	]
+
 	serial = {
 		"side length": 9,
-		"grid": grid,
+		"difficulty": None,
+		"grid": unsolveable_grid,
 		"solved grid": []
 	}
 	puzzle = SudokuPuzzle()
-	puzzle.set_from_serialised_dict(serial)
+	try:
+		puzzle.set_from_serialised_dict(serial)
+	except:
+		print(f"fail!!!")
+
+	# with open("PuzzleExample.json", "rt") as json_in:
+	#	puzzles_data = json.load(json_in)
+	#	for p in puzzles_data["puzzles"]:
+	#		puzzle = SudokuPuzzle()
+	#		puzzle.set_from_serialised_dict(p)
+	#		puzzle.solve()
+	#		for i in range(puzzle.side_length):
+	#			print(puzzle.get_row(i))
+	#		print(f"\n\n")
+	#		for i in range(puzzle.side_length):
+	#			print(puzzle._grid[i])
+	#
+	#	del puzzles_data
+
 	with open("PuzzleExample.json", "wt") as json_out:
-		data = {"puzzles": []}
-		data["puzzles"].append(puzzle.get_as_serialized_dict())
-		json.dump(data, json_out)
+		add_to_puzzles(puzzle)
+		json.dump(puzzles_data, json_out, indent=4, separators=(", ", ": "))
 
 
-if __name__ == '__main__': main()
+if __name__ == "__main__": main()
