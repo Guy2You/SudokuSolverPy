@@ -111,7 +111,7 @@ class SudokuPuzzle:
 		if row >= self.sub_side_length or column >= self.sub_side_length or row < 0 or column < 0:
 			raise ValueError(
 				f"{row}, {column} is not a valid subgrid position in a puzzle with side length {self.side_length} and sub side length {self.sub_side_length}")
-		self.__set_tile(row_offset + row, column_offset + column, value)
+		self.__set_tile(row_offset + row, column_offset + column, value, force=force)
 
 	def is_full(self):
 		"""
@@ -374,6 +374,58 @@ class SudokuPuzzle:
 
 					clear_multiple_value_tiles()
 
+		def backtracking_solve(possibility_map=None):
+			def generate_possibility_map():
+				return [[[x for x in self.number_set if x not in self.get_row(r) if x not in self.get_column(c) if
+						  x not in [y for z in self.get_subgrid(r, c) for y in z]] for c in range(self.side_length)] for
+						r in
+						range(self.side_length)]
+
+			def update_possibility_map(old_map, row, column, inserted):
+				updated_map = copy.deepcopy(old_map)
+				for i in range(self.side_length):
+					try:
+						updated_map[row][i].remove(inserted)
+					except ValueError:
+						pass
+					try:
+						updated_map[i][column].remove(inserted)
+					except ValueError:
+						pass
+				sub_row = (row // self.sub_side_length) * self.sub_side_length
+				sub_col = (column // self.sub_side_length) * self.sub_side_length
+				for i in range(self.sub_side_length):
+					for j in range(self.sub_side_length):
+						try:
+							updated_map[sub_row + i][sub_col + j].remove(inserted)
+						except ValueError:
+							pass
+				return updated_map
+
+			if not possibility_map:
+				possibility_map = generate_possibility_map()
+
+			def all_squares_possible(covering_map):
+				for r in range(self.side_length):
+					for c in range(self.side_length):
+						if not self.get_tile(r, c) and len(covering_map[r][c]) == 0:
+							return False
+				return True
+
+			for r in range(self.side_length):
+				for c in range(self.side_length):
+					if not self.get_tile(r, c):
+						for value in possibility_map[r][c]:
+							self.__set_tile(r, c, value)
+							new_map = update_possibility_map(possibility_map, r, c, value)
+							if all_squares_possible(new_map):
+								if backtracking_solve(possibility_map=new_map):
+									return True
+							self.__set_tile(r, c, 0, force=True)
+						# value = possibility_map[r][c].pop()
+						return False
+			return True
+
 		if self.contains_invalid_values():
 			raise Exception("The puzzle that is trying to be solved is invalid and will not have a solution.")
 
@@ -395,7 +447,8 @@ class SudokuPuzzle:
 				return None
 
 		if not change_made:
-			raise Exception("The solving algorithm has insufficient ability to solve this puzzle.")
+			backtracking_solve()
+		# raise Exception("The solving algorithm has insufficient ability to solve this puzzle.")
 		else:
 			self.solve()
 
@@ -452,10 +505,10 @@ def main():
 		"solved grid": []
 	}
 	puzzle = SudokuPuzzle()
-	try:
-		puzzle.set_from_serialised_dict(serial)
-	except:
-		print(f"fail!!!")
+	# try:
+	puzzle.set_from_serialised_dict(serial)
+	# except:
+	#	print(f"fail!!!")
 
 	# with open("PuzzleExample.json", "rt") as json_in:
 	#	puzzles_data = json.load(json_in)
